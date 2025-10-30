@@ -1,0 +1,73 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16
+    container_name: invoice-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: invoice_db
+      POSTGRES_USER: devuser
+      POSTGRES_PASSWORD: devpass123
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d
+    networks:
+      - invoice-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devuser -d invoice_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Invoice Management API
+  api:
+    build:
+      context: ./InvoiceManagement
+      dockerfile: Dockerfile
+    container_name: invoice-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Database connection
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=invoice_db;Username=devuser;Password=devpass123"
+
+      # JWT Configuration
+      Jwt__Key: "7c387550bf92bf47f906f59c63c8aaae"
+      Jwt__Issuer: "InvoiceManagementAPI"
+      Jwt__Audience: "InvoiceManagementAPI"
+      Jwt__ExpiryInMinutes: "30"
+
+      # ASP.NET Core settings
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ASPNETCORE_URLS: "http://+:8080"
+
+      # Logging
+      Logging__LogLevel__Default: "Information"
+      Logging__LogLevel__Microsoft.AspNetCore: "Warning"
+
+      # Lock timeout (in minutes)
+      LockTimeout: "5"
+    ports:
+      - "8080:8080"
+    networks:
+      - invoice-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/swagger/index.html"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  invoice-network:
+    driver: bridge
+    name: invoice-network
+
+volumes:
+  postgres_data:
+    name: invoice-postgres-data

@@ -1,0 +1,28 @@
+FROM postgres:16-alpine
+
+# Set default environment variables (can be overridden at runtime)
+ENV POSTGRES_USER=devuser \
+    POSTGRES_PASSWORD=devpass123 \
+    POSTGRES_DB=webapi_db \
+    PGDATA=/var/lib/postgresql/data/pgdata
+
+# Install additional tools if needed
+RUN apk add --no-cache \
+    postgresql-contrib
+
+# Create directory for initialization scripts
+RUN mkdir -p /docker-entrypoint-initdb.d
+
+# Copy initialization scripts (executed in alphabetical order)
+# Note: If you add .sql files to db-init/, rebuild the image
+COPY ./db-init/ /docker-entrypoint-initdb.d/
+
+# Health check
+HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
+    CMD pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} || exit 1
+
+# Expose PostgreSQL port
+EXPOSE 5432
+
+# Use the default postgres entrypoint
+# It will automatically run scripts in /docker-entrypoint-initdb.d/
