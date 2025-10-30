@@ -136,11 +136,13 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
+// Enable Swagger in all environments (including Production)
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Invoice Management API v1");
+    c.RoutePrefix = "swagger"; // Swagger UI at /swagger
+});
 
 app.UseExceptionHandlingMiddleware();
 app.UseCors("AllowAll");
