@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database for Entity Framework
+  postgres:
+    image: postgres:16-alpine
+    container_name: dotnet-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-devuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-devpass123}
+      POSTGRES_DB: ${DB_NAME:-webapi_db}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dotnet-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-devuser}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # .NET WebAPI Service
+  webapi:
+    build:
+      context: .
+      dockerfile: Dockerfile.webapi
+    container_name: dotnet-webapi
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: "Host=postgres;Database=${DB_NAME:-webapi_db};Username=${DB_USER:-devuser};Password=${DB_PASSWORD:-devpass123}"
+    ports:
+      - "${API_PORT:-5000}:8080"
+    volumes:
+      - ../InvoiceManagement/InvoiceManagement:/app
+      - ~/.nuget/packages:/root/.nuget/packages:rw
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - dotnet-network
+    command: ["dotnet", "watch", "run", "--no-restore", "--no-launch-profile"]
+
+  # .NET SDK Container for CLI operations
+  dotnet-cli:
+    build:
+      context: .
+      dockerfile: Dockerfile.dotnet
+    container_name: dotnet-cli
+    volumes:
+      - ../InvoiceManagement:/workspace
+      - ~/.nuget/packages:/root/.nuget/packages:rw
+    networks:
+      - dotnet-network
+    stdin_open: true
+    tty: true
+    command: ["/bin/bash"]
+
+networks:
+  dotnet-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

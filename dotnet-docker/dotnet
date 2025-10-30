@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# Docker-based replacement for the dotnet command
+# This script can be used as a drop-in replacement for the dotnet CLI
+
+# Build the Docker image if it doesn't exist
+#if ! docker images | grep -q "dotnet-cli-tool"; then
+ #   echo "Building dotnet-cli-tool image..."
+ #   docker build -f "$(dirname "$0")/Dockerfile.dotnet" -t dotnet-cli-tool "$(dirname "$0")"
+#fi
+
+# Run dotnet command in Docker container
+#docker run --rm -it \
+#    -v "$(pwd):/workspace" \
+#    -v "$HOME/.nuget/packages:/root/.nuget/packages" \
+#    -v "$HOME/.dotnet:/root/.dotnet" \
+#    --network host \
+#    -w /workspace \
+#    dotnet-cli-tool "$@"
+
+
+#!/bin/bash
+
+# Docker-based replacement for the dotnet command
+# This script can be used as a drop-in replacement for the dotnet CLI
+
+# Build the Docker image if it doesn't exist
+if ! docker images | grep -q "dotnet-cli-tool"; then
+    echo "Building dotnet-cli-tool image..."
+    docker build -f "$(dirname "$0")/Dockerfile.dotnet" -t dotnet-cli-tool "$(dirname "$0")"
+fi
+
+# Detect whether we have a TTY
+if [ -t 1 ]; then
+    TTY_ARG="-t"
+else
+    TTY_ARG=""
+fi
+
+# Run dotnet command in Docker container
+docker run --rm -i $TTY_ARG \
+    -v "$(pwd):/workspace" \
+    -v "$HOME/.nuget/packages:/root/.nuget/packages" \
+    -v "$HOME/.dotnet:/root/.dotnet" \
+    --network host \
+    -w /workspace \
+    dotnet-cli-tool "$@"

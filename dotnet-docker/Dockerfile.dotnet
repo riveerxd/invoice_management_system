@@ -1,0 +1,23 @@
+# Multi-purpose .NET SDK Docker image that can replace the dotnet command
+FROM mcr.microsoft.com/dotnet/sdk:8.0
+
+# Install additional tools that might be needed
+RUN apt-get update && \
+    apt-get install -y \
+        git \
+        curl \
+        wget \
+        vim \
+        nano \
+        postgresql-client \
+        && rm -rf /var/lib/apt/lists/*
+
+# Install Entity Framework Core tools globally
+RUN dotnet tool install --global dotnet-ef
+ENV PATH="${PATH}:/root/.dotnet/tools"
+
+# Set working directory
+WORKDIR /workspace
+
+# Keep container running if needed
+ENTRYPOINT ["dotnet"]

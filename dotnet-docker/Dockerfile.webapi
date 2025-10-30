@@ -1,0 +1,25 @@
+# Dockerfile for running .NET WebAPI projects
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS development
+
+# Install Entity Framework Core tools
+RUN dotnet tool install --global dotnet-ef
+ENV PATH="${PATH}:/root/.dotnet/tools"
+
+# Install additional development tools
+RUN apt-get update && \
+    apt-get install -y \
+        curl \
+        vim \
+        postgresql-client \
+        && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install dotnet watch for hot reload
+RUN dotnet tool install --global dotnet-watch
+
+# Expose port
+EXPOSE 5000
+
+# Keep the container running
+CMD ["dotnet", "watch", "run", "--urls", "http://0.0.0.0:5000"]

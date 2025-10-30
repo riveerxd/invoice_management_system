@@ -1,0 +1,42 @@
+# Build artifacts
+**/bin/
+**/obj/
+**/out/
+
+# IDE and editor files
+**/.vs/
+**/.vscode/
+**/.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Test results
+**/TestResults/
+**/*.trx
+
+# NuGet packages
+*.nupkg
+*.snupkg
+**/packages/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files
+**/Dockerfile*
+**/.dockerignore
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+!README.md
+
+# Other
+**/node_modules/

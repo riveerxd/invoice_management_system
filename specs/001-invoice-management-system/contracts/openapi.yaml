@@ -1,0 +1,849 @@
+openapi: 3.0.3
+info:
+  title: Invoice Management API
+  description: |
+    RESTful API for managing received and issued invoices with role-based access control,
+    payment tracking, and compliance features.
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+
+servers:
+  - url: http://localhost:5000/api
+    description: Local development server
+  - url: https://api.example.com/api
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User authentication and session management
+  - name: Invoices
+    description: Invoice CRUD operations and queries
+  - name: Users
+    description: User management (administrators only)
+
+paths:
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Authenticate user and create session
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Terminate user session
+      operationId: logout
+      security:
+        - sessionAuth: []
+      responses:
+        '204':
+          description: Logout successful
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /invoices:
+    get:
+      tags:
+        - Invoices
+      summary: List and filter invoices
+      description: Retrieve invoices with optional filtering by date, status, partner, etc.
+      operationId: listInvoices
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: invoiceNumber
+          in: query
+          description: Filter by invoice number (exact match)
+          schema:
+            type: string
+        - name: partnerName
+          in: query
+          description: Filter by business partner name (partial match)
+          schema:
+            type: string
+        - name: type
+          in: query
+          description: Filter by invoice type
+          schema:
+            $ref: '#/components/schemas/InvoiceType'
+        - name: paymentStatus
+          in: query
+          description: Filter by payment status
+          schema:
+            $ref: '#/components/schemas/PaymentStatus'
+        - name: issueDateFrom
+          in: query
+          description: Filter invoices issued on or after this date
+          schema:
+            type: string
+            format: date
+        - name: issueDateTo
+          in: query
+          description: Filter invoices issued on or before this date
+          schema:
+            type: string
+            format: date
+        - name: dueDateFrom
+          in: query
+          description: Filter invoices due on or after this date
+          schema:
+            type: string
+            format: date
+        - name: dueDateTo
+          in: query
+          description: Filter invoices due on or before this date
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          description: Page number (1-indexed)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 50
+      responses:
+        '200':
+          description: List of invoices
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+    post:
+      tags:
+        - Invoices
+      summary: Create a new invoice
+      description: Create invoice (requires Accountant or Administrator role)
+      operationId: createInvoice
+      security:
+        - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvoiceRequest'
+      responses:
+        '201':
+          description: Invoice created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          description: Invoice number already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /invoices/{id}:
+    get:
+      tags:
+        - Invoices
+      summary: Get invoice details
+      description: Retrieve detailed information for a specific invoice
+      operationId: getInvoice
+      security:
+        - sessionAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      responses:
+        '200':
+          description: Invoice details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    put:
+      tags:
+        - Invoices
+      summary: Update an invoice
+      description: Update invoice (requires Accountant or Administrator role). Acquires pessimistic lock.
+      operationId: updateInvoice
+      security:
+        - sessionAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateInvoiceRequest'
+      responses:
+        '200':
+          description: Invoice updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          description: Invoice is locked by another user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LockConflictResponse'
+
+    delete:
+      tags:
+        - Invoices
+      summary: Delete an invoice
+      description: Delete invoice (requires Administrator role). Creates audit log entry.
+      operationId: deleteInvoice
+      security:
+        - sessionAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      responses:
+        '204':
+          description: Invoice deleted successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /invoices/{id}/lock:
+    post:
+      tags:
+        - Invoices
+      summary: Acquire lock on invoice
+      description: Acquire pessimistic lock for editing (5-minute expiration)
+      operationId: lockInvoice
+      security:
+        - sessionAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      responses:
+        '200':
+          description: Lock acquired successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LockResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          description: Invoice is already locked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LockConflictResponse'
+
+    delete:
+      tags:
+        - Invoices
+      summary: Release lock on invoice
+      description: Release pessimistic lock (on save/cancel)
+      operationId: unlockInvoice
+      security:
+        - sessionAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InvoiceId'
+      responses:
+        '204':
+          description: Lock released successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /invoices/export:
+    get:
+      tags:
+        - Invoices
+      summary: Export invoices to CSV
+      description: Export filtered invoices to CSV file
+      operationId: exportInvoices
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: invoiceNumber
+          in: query
+          schema:
+            type: string
+        - name: partnerName
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/InvoiceType'
+        - name: paymentStatus
+          in: query
+          schema:
+            $ref: '#/components/schemas/PaymentStatus'
+        - name: issueDateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: issueDateTo
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: attachment; filename="invoices_20250122.csv"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /users:
+    get:
+      tags:
+        - Users
+      summary: List users
+      description: Retrieve all users (requires Administrator role)
+      operationId: listUsers
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+    post:
+      tags:
+        - Users
+      summary: Create a new user
+      description: Create user (requires Administrator role)
+      operationId: createUser
+      security:
+        - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          description: Username or email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /users/{id}:
+    put:
+      tags:
+        - Users
+      summary: Update user
+      description: Update user details (requires Administrator role)
+      operationId: updateUser
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+components:
+  securitySchemes:
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: SESSION_ID
+      description: Session-based authentication (30-minute timeout)
+
+  parameters:
+    InvoiceId:
+      name: id
+      in: path
+      required: true
+      description: Invoice ID
+      schema:
+        type: integer
+
+  schemas:
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          example: accountant1
+        password:
+          type: string
+          format: password
+          example: SecurePass123
+
+    LoginResponse:
+      type: object
+      properties:
+        userId:
+          type: integer
+          example: 42
+        username:
+          type: string
+          example: accountant1
+        role:
+          $ref: '#/components/schemas/UserRole'
+        sessionExpiresAt:
+          type: string
+          format: date-time
+          description: Session expiration time (30 minutes from login)
+
+    CreateInvoiceRequest:
+      type: object
+      required:
+        - invoiceNumber
+        - issueDate
+        - dueDate
+        - type
+        - partnerName
+        - amountCents
+      properties:
+        invoiceNumber:
+          type: string
+          maxLength: 50
+          example: INV-2025-001
+        issueDate:
+          type: string
+          format: date
+          example: "2025-01-15"
+        dueDate:
+          type: string
+          format: date
+          example: "2025-02-15"
+        type:
+          $ref: '#/components/schemas/InvoiceType'
+        partnerName:
+          type: string
+          maxLength: 200
+          example: Acme Corporation
+        partnerIdentifier:
+          type: string
+          maxLength: 50
+          example: TAX-123456
+          nullable: true
+        amountCents:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Amount in smallest currency unit (cents)
+          example: 125000
+        paymentStatus:
+          $ref: '#/components/schemas/PaymentStatus'
+        paymentDate:
+          type: string
+          format: date
+          nullable: true
+          example: "2025-02-10"
+
+    UpdateInvoiceRequest:
+      type: object
+      properties:
+        invoiceNumber:
+          type: string
+          maxLength: 50
+        issueDate:
+          type: string
+          format: date
+        dueDate:
+          type: string
+          format: date
+        type:
+          $ref: '#/components/schemas/InvoiceType'
+        partnerName:
+          type: string
+          maxLength: 200
+        partnerIdentifier:
+          type: string
+          maxLength: 50
+          nullable: true
+        amountCents:
+          type: integer
+          format: int64
+          minimum: 0
+        paymentStatus:
+          $ref: '#/components/schemas/PaymentStatus'
+        paymentDate:
+          type: string
+          format: date
+          nullable: true
+
+    InvoiceResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 123
+        invoiceNumber:
+          type: string
+          example: INV-2025-001
+        issueDate:
+          type: string
+          format: date
+          example: "2025-01-15"
+        dueDate:
+          type: string
+          format: date
+          example: "2025-02-15"
+        type:
+          $ref: '#/components/schemas/InvoiceType'
+        businessPartner:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+              example: Acme Corporation
+            identifier:
+              type: string
+              nullable: true
+        amountCents:
+          type: integer
+          format: int64
+          example: 125000
+        amountDisplay:
+          type: string
+          description: Formatted amount for display (e.g., "$1,250.00")
+          example: "$1,250.00"
+        paymentStatus:
+          $ref: '#/components/schemas/PaymentStatus'
+        paymentDate:
+          type: string
+          format: date
+          nullable: true
+        isOverdue:
+          type: boolean
+          description: True if unpaid and past due date
+          example: false
+        createdBy:
+          type: object
+          properties:
+            id:
+              type: integer
+            username:
+              type: string
+        modifiedBy:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+            username:
+              type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        isLocked:
+          type: boolean
+          description: True if invoice is currently locked
+          example: false
+        lockedBy:
+          type: string
+          nullable: true
+          description: Username of user who holds lock
+          example: accountant2
+
+    InvoiceListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceResponse'
+        totalCount:
+          type: integer
+          description: Total number of invoices matching filters
+          example: 245
+        page:
+          type: integer
+          example: 1
+        pageSize:
+          type: integer
+          example: 50
+        totalPages:
+          type: integer
+          example: 5
+        summary:
+          type: object
+          description: Aggregate statistics
+          properties:
+            totalPaidCents:
+              type: integer
+              format: int64
+            totalUnpaidCents:
+              type: integer
+              format: int64
+            paidCount:
+              type: integer
+            unpaidCount:
+              type: integer
+            overdueCount:
+              type: integer
+
+    LockResponse:
+      type: object
+      properties:
+        invoiceId:
+          type: integer
+        lockedBy:
+          type: string
+          example: accountant1
+        lockAcquiredAt:
+          type: string
+          format: date-time
+        lockExpiresAt:
+          type: string
+          format: date-time
+
+    LockConflictResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Invoice is currently locked by another user
+        lockedBy:
+          type: string
+          example: accountant2
+        lockExpiresAt:
+          type: string
+          format: date-time
+
+    CreateUserRequest:
+      type: object
+      required:
+        - username
+        - email
+        - password
+        - role
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          example: newuser
+        email:
+          type: string
+          format: email
+          example: newuser@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+        role:
+          $ref: '#/components/schemas/UserRole'
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/UserRole'
+        isActive:
+          type: boolean
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    InvoiceType:
+      type: string
+      enum:
+        - Received
+        - Issued
+      example: Issued
+
+    PaymentStatus:
+      type: string
+      enum:
+        - Paid
+        - Unpaid
+      example: Unpaid
+
+    UserRole:
+      type: string
+      enum:
+        - Accountant
+        - Manager
+        - Administrator
+      example: Accountant
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Invalid request
+        message:
+          type: string
+          example: Invoice number is required
+        details:
+          type: object
+          nullable: true
+          additionalProperties: true
+
+  responses:
+    BadRequestError:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: Unauthorized
+            message: Please log in to access this resource
+
+    ForbiddenError:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: Forbidden
+            message: This action requires Administrator role
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: Not Found
+            message: Invoice with ID 123 not found
