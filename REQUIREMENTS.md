@@ -1,5 +1,4 @@
 # Pracovní dokument: Návrh systému „Firemní evidence faktur“  
-*(verze pro konzultaci – ne finální odevzdání)*
 
 ## 1. Účel dokumentu  
 Tento dokument slouží jako výchozí analýza požadavků na jednoduchý systém pro evidenci firemních faktur. Cílem je upřesnit rozsah funkcí, uživatele a očekávání před zahájením vývoje nebo další specifikace.
